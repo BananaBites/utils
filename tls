@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+tmux lsk -N | fzf | awk '{print $1, $2}' | while read -r prefix key; do
+  tmux send-keys -K "$prefix" "$key"
+done
