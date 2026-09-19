@@ -1,5 +1,11 @@
 [
   {
+    "name": "openrouter",
+    "title": "OpenRouter credits",
+    "command": "/workspaces/utils/openrouter/openrouter --json",
+    "render": "credits"
+  },
+  {
     "name": "disk",
     "title": "Disk",
     "command": "df -h / | tail -1 | awk '{print $3\" used of \"$2\" (\"$5\")\"}'"

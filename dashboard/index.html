@@ -62,8 +62,19 @@
     max-height: 260px; overflow: auto; color: #c3cad6;
   }
   pre:empty::after { content: "…"; color: var(--dim); }
-  .busy pre { opacity: .35; }
+  .body { min-height: 18px; }
+  .busy .body { opacity: .35; }
   .card.error pre { color: #ffb0b0; }
+  .big { font-size: 30px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+  .big small { font-size: 12px; font-weight: 500; color: var(--dim); margin-left: 7px; }
+  .bar { height: 7px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; margin: 11px 0 13px; }
+  .bar i { display: block; height: 100%; border-radius: 99px; transition: width .5s ease;
+    background: linear-gradient(90deg, hsl(var(--hue) 80% 55%), hsl(calc(var(--hue) + 40) 90% 65%));
+    box-shadow: 0 0 12px hsl(var(--hue) 80% 60% / .6); }
+  .rows { display: grid; gap: 4px; font-size: 12.5px; }
+  .rows div { display: flex; justify-content: space-between; }
+  .rows span { color: var(--dim); }
+  .rows b { font-weight: 600; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -77,6 +88,25 @@
 const grid = document.getElementById("grid");
 const statusEl = document.getElementById("status");
 const cards = new Map();
+const config = new Map();
+
+const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const money = n => "$" + n.toFixed(2);
+
+const renderers = {
+  text: r => `<pre>${esc(r.output || "(no output)")}</pre>`,
+  credits: r => {
+    const d = JSON.parse(r.output);
+    const pct = d.credits ? Math.min(100, d.used / d.credits * 100) : 0;
+    return `<div class="big">${pct.toFixed(1)}%<small>used</small></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="rows">
+        <div><span>used</span><b>${money(d.used)}</b></div>
+        <div><span>remaining</span><b>${money(d.remaining)}</b></div>
+        <div><span>today</span><b>${money(d.today)}</b></div>
+      </div>`;
+  }
+};
 
 async function load() {
   const widgets = await (await fetch("/widgets")).json();
@@ -91,24 +121,28 @@ function makeCard(w, i) {
   el.style.animationDelay = (i * 40) + "ms";
   el.innerHTML = `<div class="head"><span class="dot"></span>
       <span class="title"></span><span class="meta"></span>
-      <button class="refresh" title="Refresh">↻</button></div><pre></pre>`;
+      <button class="refresh" title="Refresh">↻</button></div><div class="body"></div>`;
   el.querySelector(".title").textContent = w.title;
   el.querySelector(".refresh").onclick = () => run(w.name);
   cards.set(w.name, el);
+  config.set(w.name, w);
   return el;
 }
 
 async function run(name) {
   const el = cards.get(name);
+  const w = config.get(name);
+  const body = el.querySelector(".body");
   el.classList.add("busy");
   try {
     const r = await (await fetch("/run?name=" + encodeURIComponent(name))).json();
-    el.querySelector("pre").textContent = r.output || "(no output)";
+    try { body.innerHTML = (renderers[w.render] || renderers.text)(r); }
+    catch { body.innerHTML = renderers.text(r); }
     el.classList.toggle("error", r.code !== 0);
     el.querySelector(".meta").textContent = r.code === 0 ? r.ms + " ms" : "exit " + r.code;
   } catch (e) {
     el.classList.add("error");
-    el.querySelector("pre").textContent = "request failed: " + e;
+    body.innerHTML = `<pre>request failed: ${esc(e)}</pre>`;
   }
   el.classList.remove("busy");
 }

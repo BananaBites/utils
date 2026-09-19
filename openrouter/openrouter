@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Show OpenRouter credit usage. Key from $OPENROUTER_API_KEY or pi's auth store.
+# Usage: openrouter        human-readable summary
+#        openrouter --json raw numbers for the dashboard
+set -euo pipefail
+
+key="${OPENROUTER_API_KEY:-$(jq -r '.openrouter.key // empty' ~/.pi/agent/auth.json)}"
+[ -n "$key" ] || { echo "no OpenRouter key (set OPENROUTER_API_KEY)" >&2; exit 1; }
+
+credits=$(curl -sf https://openrouter.ai/api/v1/credits -H "Authorization: Bearer $key")
+usage=$(curl -sf https://openrouter.ai/api/v1/key -H "Authorization: Bearer $key")
+
+if [ "${1:-}" = "--json" ]; then
+  jq -n --argjson c "$credits" --argjson k "$usage" '{
+    credits:   $c.data.total_credits,
+    used:      $c.data.total_usage,
+    remaining: ($c.data.total_credits - $c.data.total_usage),
+    today:     $k.data.usage_daily,
+    week:      $k.data.usage_weekly,
+    month:     $k.data.usage_monthly
+  }'
+  exit
+fi
+
+jq -nr --argjson c "$credits" --argjson k "$usage" '
+  def usd: ((.*100) | round) as $c | "$\($c / 100 | floor).\(($c % 100 | tostring) | if length < 2 then "0" + . else . end)";
+  ($c.data.total_credits) as $total |
+  ($c.data.total_usage) as $used |
+  "credits    \($total | usd)",
+  "used       \($used | usd)  (\(($used / $total * 1000 | round) / 10)%)",
+  "remaining  \(($total - $used) | usd)",
+  "today      \($k.data.usage_daily | usd)",
+  "week       \($k.data.usage_weekly | usd)",
+  "month      \($k.data.usage_monthly | usd)"
+'
