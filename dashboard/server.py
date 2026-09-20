@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 ROOT = Path(__file__).parent
+REPO = ROOT.parent
 WIDGETS = json.loads((ROOT / "widgets.json").read_text())
 
 
@@ -30,7 +31,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             done = subprocess.run(
                 widget["command"], shell=True, capture_output=True, text=True,
-                timeout=widget.get("timeout", 30), cwd=widget.get("cwd") or ROOT,
+                timeout=widget.get("timeout", 30), cwd=widget.get("cwd") or REPO,
             )
             output, code = done.stdout + done.stderr, done.returncode
         except subprocess.TimeoutExpired:

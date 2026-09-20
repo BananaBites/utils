@@ -2,38 +2,23 @@
   {
     "name": "codex",
     "title": "Codex usage",
-    "command": "/workspaces/utils/codex/codex-usage --json",
+    "command": "codex/codex-usage --json",
     "render": "bars"
   },
   {
     "name": "openrouter",
     "title": "OpenRouter credits",
-    "command": "/workspaces/utils/openrouter/openrouter --json",
+    "command": "openrouter/openrouter --json",
     "render": "credits"
   },
   {
-    "name": "disk",
-    "title": "Disk",
-    "command": "df -h / | tail -1 | awk '{print $3\" used of \"$2\" (\"$5\")\"}'"
-  },
-  {
-    "name": "git",
-    "title": "Git status",
-    "command": "git -C /workspaces/utils status --short --branch"
-  },
-  {
-    "name": "tmux",
-    "title": "Tmux sessions",
-    "command": "tmux ls 2>&1 || echo 'no server running'"
+    "name": "system",
+    "title": "System",
+    "command": "sysinfo/sysinfo"
   },
   {
     "name": "pi",
     "title": "Pi versions",
     "command": "pi --version && pi-web --version"
-  },
-  {
-    "name": "docker",
-    "title": "Docker containers",
-    "command": "docker ps --format '{{.Names}}\\t{{.Status}}' 2>&1 | head -20"
   }
 ]

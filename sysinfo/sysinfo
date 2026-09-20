@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Show local system usage: RAM, disk, load.
+# Usage: sysinfo        human-readable summary
+#        sysinfo --json raw values for the dashboard
+set -euo pipefail
+
+read -r ram_total ram_used ram_pct <<<"$(awk '/^MemTotal/ {t=$2} /^MemAvailable/ {a=$2} END {printf "%.0f %.0f %.0f", t*1024, (t-a)*1024, (t-a)/t*100}' /proc/meminfo)"
+read -r disk_total disk_used disk_pct <<<"$(df -Pm / | awk 'NR==2 {gsub(/%/,"",$5); printf "%.0f %.0f %s", $2*1048576, $3*1048576, $5}')"
+load=$(cut -d' ' -f1-3 /proc/loadavg)
+
+if [[ ${1:-} == --json ]]; then
+  printf '{"ram":{"total":%s,"used":%s,"percent":%s},"disk":{"total":%s,"used":%s,"percent":%s},"load":[%s]}\n' \
+    "$ram_total" "$ram_used" "$ram_pct" "$disk_total" "$disk_used" "$disk_pct" "${load// /, }"
+else
+  fmt() { numfmt --to=iec --format=%.1f "$1"; }
+  printf 'RAM   %s used of %s (%s%%)\nDisk  %s used of %s (%s%%)\nLoad  %s\n' \
+    "$(fmt "$ram_used")" "$(fmt "$ram_total")" "$ram_pct" \
+    "$(fmt "$disk_used")" "$(fmt "$disk_total")" "$disk_pct" "$load"
+fi

@@ -20,7 +20,9 @@ Append an entry to `widgets.json` — no code changes needed:
       "cwd": "/optional/working/dir"
     }
 
-`timeout` and `cwd` are optional. The command runs through the shell; stdout
+`timeout` and `cwd` are optional. Commands run through the shell, from the
+repo root (the directory containing `dashboard/`) unless `cwd` is set — so
+refer to sibling tools relatively, e.g. `codex/codex-usage --json`. stdout
 and stderr are shown together. A non-zero exit turns the card red.
 
 ## Renderers
@@ -30,9 +32,9 @@ to draw it differently. Built-in renderers:
 
 - `text` (default) — the raw output in a `<pre>`.
 - `credits` — expects JSON like `{credits, used, remaining, today}`, shown as
-  a progress bar. Used by OpenRouter; see `../openrouter/openrouter --json`.
+  a progress bar. Used by OpenRouter; see `openrouter/openrouter --json`.
 - `bars` — expects `{plan, windows:[{label, used_percent, resets_in}]}` and draws
-  one progress bar per window. Used by Codex; see `../codex/codex-usage --json`.
+  one progress bar per window. Used by Codex; see `codex/codex-usage --json`.
 
 The server binds `127.0.0.1` only, but it runs commands you put in the config,
 so don't expose the port.
