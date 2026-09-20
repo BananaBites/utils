@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""GitHub Codespaces usage of the authenticated user vs included quota.
+
+Token from $GITHUB_TOKEN or the repo .env: a fine-grained PAT with the
+account permission "Plan" (read) — no repository access needed (see .env.example).
+Usage: codespaces        human-readable summary
+       codespaces --json machine-readable
+"""
+import json
+import os
+import re
+import sys
+from pathlib import Path
+from urllib.request import Request, urlopen
+
+# Included monthly quota per plan name: (core hours, GB-months of storage).
+LIMITS = {"free": (120, 15), "pro": (180, 20)}
+
+
+def read_token():
+    tok = os.environ.get("GITHUB_TOKEN") or ""
+    if not tok:
+        env = Path(__file__).resolve().parent.parent / ".env"
+        if env.exists():
+            for line in env.read_text().splitlines():
+                if line.startswith("GITHUB_TOKEN="):
+                    tok = line.split("=", 1)[1].strip().strip('"')
+    if not tok:
+        sys.exit("codespaces: no token — cp .env.example .env and paste GITHUB_TOKEN (see .env.example)")
+    return tok
+
+
+TOKEN = read_token()
+
+
+def api(path):
+    req = Request("https://api.github.com" + path, headers={
+        "Authorization": "Bearer " + TOKEN,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "utils.d-codespaces",
+    })
+    with urlopen(req, timeout=30) as r:
+        return json.load(r)
+
+
+def usage(login):
+    """(core hours, GB-months) used this month; try both billing endpoints."""
+    errors = []
+    for path in (f"/users/{login}/settings/billing/usage",
+                 f"/users/{login}/settings/billing/usage/summary"):
+        try:
+            data = api(path)
+        except Exception as e:
+            errors.append(str(e))
+            continue
+        hours, gb = 0.0, 0.0
+        for it in data.get("usageItems") or []:
+            if "codespace" not in (it.get("product") or "").lower():
+                continue
+            unit = (it.get("unitType") or "").lower()
+            qty = float(it.get("quantity") or it.get("grossQuantity") or 0)
+            if "hour" in unit:  # sku says how many cores, "core hours" already are core hours
+                m = re.search(r"(\d+)[_-]?core", it.get("sku") or "")
+                hours += qty if "core" in unit else qty * (int(m.group(1)) if m else 1)
+            elif "gb" in unit or "gigabyte" in unit or "storage" in unit:
+                gb += qty
+        return hours, gb
+    sys.exit("codespaces: usage unavailable: " + "; ".join(errors) + "\n"
+             "  → needs a token with account permission Plan: read-only (see .env.example)")
+
+
+user = api("/user")
+login = user["login"]
+plan = ((user.get("plan") or {}).get("name") or "").lower()
+inc_h, inc_s = LIMITS.get(plan, (None, None))
+hours, gb = usage(login)
+
+
+def pct(used, inc):
+    return f"{used / inc:.0%} of {inc:g}" if inc else "of ?"
+
+
+if "--json" in sys.argv:
+    print(json.dumps({
+        "login": login, "plan": plan or None,
+        "core_hours": {"used": hours, "included": inc_h},
+        "storage_gb_months": {"used": gb, "included": inc_s},
+    }))
+    sys.exit()
+
+print(f"Plan   {plan or '?'} ({login})")
+print(f"Hours  {hours:g} core-h {pct(hours, inc_h)}")
+print(f"Store  {gb:.1f} GB-month {pct(gb, inc_s)}")

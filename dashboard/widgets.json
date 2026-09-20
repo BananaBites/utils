@@ -20,5 +20,10 @@
     "name": "pi",
     "title": "Pi versions",
     "command": "pi --version && pi-web --version"
+  },
+  {
+    "name": "codespaces",
+    "title": "Codespaces",
+    "command": "codespaces/codespaces"
   }
 ]
