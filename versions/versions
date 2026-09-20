@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Installed versions of common tools, next to the latest patch of the same line.
+
+Installed versions come from each tool, latest ones from public release feeds
+(endoflife.date, npm registry, PyPI, GitHub releases). "—" means no clean feed.
+$GITHUB_TOKEN or the repo .env, if set, is used for api.github.com.
+Usage: versions
+"""
+import json
+import os
+import re
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from urllib.request import Request, urlopen
+
+# (command, version args, latest source); source:
+# eol:<product> | npm:<package> | pypi:<package> | gh:<owner>/<repo> | None
+TOOLS = [
+    ("pi", ("--version",), "npm:@earendil-works/pi-coding-agent"),
+    ("pi-web", ("--version",), "npm:@jmfederico/pi-web"),
+    ("claude", ("--version",), "npm:@anthropic-ai/claude-code"),
+    ("node", ("--version",), "eol:nodejs"),
+    ("npm", ("--version",), "npm:npm"),
+    ("python3", ("--version",), "eol:python"),
+    ("pip3", ("--version",), "pypi:pip"),
+    ("go", ("version",), "eol:go"),
+    ("rustc", ("--version",), "eol:rust"),
+    ("java", ("--version",), None),
+    ("git", ("--version",), None),
+    ("gh", ("--version",), None),
+    ("docker", ("--version",), None),
+    ("kubectl", ("version", "--client"), None),
+    ("tmux", ("-V",), "gh:tmux/tmux"),
+    ("vim", ("--version",), None),
+    ("fzf", ("--version",), "gh:junegunn/fzf"),
+    ("rg", ("--version",), "gh:BurntSushi/ripgrep"),
+    ("jq", ("--version",), "gh:jqlang/jq"),
+    ("gcc", ("-dumpfullversion",), None),
+    ("make", ("--version",), None),
+]
+
+
+def token():
+    tok = os.environ.get("GITHUB_TOKEN") or ""
+    if not tok:
+        env = Path(__file__).resolve().parent.parent / ".env"
+        if env.exists():
+            for line in env.read_text().splitlines():
+                if line.startswith("GITHUB_TOKEN="):
+                    tok = line.split("=", 1)[1].strip().strip('"')
+    return tok
+
+
+def semver(v):
+    return tuple(int(n) for n in re.findall(r"\d+", v.split("-")[0])[:3])
+
+
+def line(v):
+    """Release line: 0.x -> major.minor, otherwise major."""
+    n = semver(v)
+    return n[:2] if n[:1] == (0,) else n[:1]
+
+
+def fetch(url, tok=None):
+    for auth in [tok, None] if tok else [None]:  # fall back to anonymous
+        headers = {"User-Agent": "utils.d-versions"}
+        if auth and "api.github.com" in url:
+            headers["Authorization"] = "Bearer " + auth
+        try:
+            with urlopen(Request(url, headers=headers), timeout=20) as r:
+                return json.load(r)
+        except Exception:
+            if auth is None:
+                raise
+
+
+def latest(source, version, tok):
+    """(latest of this line, newer line) — either may be None."""
+    kind, ref = source.split(":", 1)
+    if kind == "eol":
+        cycles = fetch(f"https://endoflife.date/api/{ref}.json")
+        for c in cycles:
+            if version == c["cycle"] or version.startswith(c["cycle"] + "."):
+                return c["latest"], (None if c is cycles[0] else cycles[0]["latest"])
+        return None, cycles[0]["latest"]
+    if kind in ("npm", "pypi"):
+        if kind == "npm":
+            data = fetch(f"https://registry.npmjs.org/{ref}", tok)
+            versions, overall = data["versions"], data["dist-tags"]["latest"]
+        else:
+            data = fetch(f"https://pypi.org/pypi/{ref}/json")
+            versions, overall = data["releases"], data["info"]["version"]
+        same = [v for v in versions if re.fullmatch(r"\d+(\.\d+)*", v) and line(v) == line(version)]
+        return (max(same, key=semver) if same else None), (overall if line(overall) != line(version) else None)
+    if kind == "gh":
+        tag = fetch(f"https://api.github.com/repos/{ref}/releases/latest", tok)["tag_name"]
+        v = re.sub(r"^[a-z]+-?", "", tag, flags=re.I)
+        return (v, None) if line(v) == line(version) else (None, v)
+
+
+def installed(cmd, args):
+    try:
+        p = subprocess.run((cmd, *args), capture_output=True, text=True, timeout=10)
+    except Exception:
+        return None
+    lines = ((p.stdout or "") + (p.stderr or "")).splitlines()
+    version = re.sub(r"^[^0-9]*", "", lines[0] if lines else "").split(" ")[0].strip()
+    return version or None
+
+
+def row(tool, args, source, tok):
+    version = installed(tool, args)
+    if version is None:
+        return f"{tool:<8} not installed"
+    if not source:
+        return f"{tool:<8} {version:<12} —"
+    try:
+        same, newer = latest(source, version, tok)
+    except Exception:
+        same, newer = None, None
+    status = "-> " + same if same and semver(same) > semver(version) else ("latest" if same else "")
+    if newer:
+        status = (status + "  " if status else "") + f"(newer: {newer})"
+    return f"{tool:<8} {version:<12} {status or '—'}"
+
+
+tok = token()
+with ThreadPoolExecutor(8) as pool:
+    for r in pool.map(lambda t: row(*t, tok), TOOLS):
+        print(r.rstrip())

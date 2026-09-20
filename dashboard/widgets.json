@@ -14,16 +14,18 @@
   {
     "name": "system",
     "title": "System",
-    "command": "sysinfo/sysinfo"
+    "command": "sysinfo/sysinfo --json",
+    "render": "bars"
   },
   {
-    "name": "pi",
-    "title": "Pi versions",
-    "command": "pi --version && pi-web --version"
+    "name": "versions",
+    "title": "Tool versions",
+    "command": "versions/versions"
   },
   {
     "name": "codespaces",
     "title": "Codespaces",
-    "command": "codespaces/codespaces"
+    "command": "codespaces/codespaces --json",
+    "render": "bars"
   }
 ]

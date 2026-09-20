@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """GitHub Codespaces usage of the authenticated user vs included quota.
 
-Token from $GITHUB_TOKEN or the repo .env: a fine-grained PAT with the
-account permission "Plan" (read) — no repository access needed (see .env.example).
+Included usage resets at the start of each month (metered products bill per
+calendar month). Token from $GITHUB_TOKEN or the repo .env: a fine-grained PAT
+with the account permission "Plan" (read) — see .env.example.
 Usage: codespaces        human-readable summary
-       codespaces --json machine-readable
+       codespaces --json dashboard JSON (bars)
 """
+import calendar
 import json
 import os
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -44,11 +47,13 @@ def api(path):
         return json.load(r)
 
 
-def usage(login):
+def usage(login, now):
     """(core hours, GB-months) used this month; try both billing endpoints."""
+    month = f"year={now.year}&month={now.month}"
+    month_hours = calendar.monthrange(now.year, now.month)[1] * 24
     errors = []
-    for path in (f"/users/{login}/settings/billing/usage",
-                 f"/users/{login}/settings/billing/usage/summary"):
+    for path in (f"/users/{login}/settings/billing/usage?{month}",
+                 f"/users/{login}/settings/billing/usage/summary?{month}"):
         try:
             data = api(path)
         except Exception as e:
@@ -60,35 +65,41 @@ def usage(login):
                 continue
             unit = (it.get("unitType") or "").lower()
             qty = float(it.get("quantity") or it.get("grossQuantity") or 0)
-            if "hour" in unit:  # sku says how many cores, "core hours" already are core hours
-                m = re.search(r"(\d+)[_-]?core", it.get("sku") or "")
+            if "gigabyte" in unit or "gb" in unit or "storage" in unit:
+                gb += qty / month_hours  # API reports GB-hours, quota is GB-months
+            elif "hour" in unit:  # quantity is machine-hours; sku names the core count
+                m = re.search(r"(\d+)[_-]?core", it.get("sku") or "") or re.search(r"_d(\d+)$", it.get("sku") or "")
                 hours += qty if "core" in unit else qty * (int(m.group(1)) if m else 1)
-            elif "gb" in unit or "gigabyte" in unit or "storage" in unit:
-                gb += qty
         return hours, gb
     sys.exit("codespaces: usage unavailable: " + "; ".join(errors) + "\n"
              "  → needs a token with account permission Plan: read-only (see .env.example)")
-
-
-user = api("/user")
-login = user["login"]
-plan = ((user.get("plan") or {}).get("name") or "").lower()
-inc_h, inc_s = LIMITS.get(plan, (None, None))
-hours, gb = usage(login)
 
 
 def pct(used, inc):
     return f"{used / inc:.0%} of {inc:g}" if inc else "of ?"
 
 
+now = datetime.now(timezone.utc)
+user = api("/user")
+login = user["login"]
+plan = ((user.get("plan") or {}).get("name") or "").lower()
+inc_h, inc_s = LIMITS.get(plan, (None, None))
+hours, gb = usage(login, now)
+reset = (now.replace(day=1) + timedelta(days=32)).replace(day=1)
+days_left = (reset - now).days
+
 if "--json" in sys.argv:
     print(json.dumps({
-        "login": login, "plan": plan or None,
-        "core_hours": {"used": hours, "included": inc_h},
-        "storage_gb_months": {"used": gb, "included": inc_s},
+        "plan": plan or None,
+        "windows": [{"label": label, "used_percent": round(100 * used / inc, 1) if inc else 0,
+                     "detail": (f"{used:.4g} of {inc:g} {unit}" if inc else f"{used:.4g} {unit}"),
+                     "resets_in": f"{days_left}d"}
+                    for label, used, inc, unit in (("Core hours", hours, inc_h, "core-h"),
+                                                   ("Storage", gb, inc_s, "GB-month"))],
     }))
     sys.exit()
 
 print(f"Plan   {plan or '?'} ({login})")
 print(f"Hours  {hours:g} core-h {pct(hours, inc_h)}")
-print(f"Store  {gb:.1f} GB-month {pct(gb, inc_s)}")
+print(f"Store  {gb:.3g} GB-month {pct(gb, inc_s)}")
+print(f"Resets {reset:%b %-d} (in {days_left}d)")

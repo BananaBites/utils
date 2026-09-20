@@ -82,6 +82,7 @@
   .rowhead { display: flex; justify-content: space-between; font-size: 12.5px; }
   .rowhead b { font-variant-numeric: tabular-nums; }
   .sub { color: var(--dim); font-size: 11px; }
+  .notes { color: var(--dim); margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -99,6 +100,12 @@ const config = new Map();
 
 const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const money = n => "$" + n.toFixed(2);
+const clamp = p => Math.min(100, Math.max(0, p || 0));
+const win = w => `<div class="win">
+    <div class="rowhead"><span>${esc(w.label)}</span><b>${clamp(w.used_percent)}%</b></div>
+    <div class="bar"><i style="width:${clamp(w.used_percent)}%"></i></div>
+    <div class="sub">${[w.detail, w.resets_in && "resets in " + w.resets_in].filter(Boolean).map(esc).join(" · ")}</div>
+  </div>`;
 
 const renderers = {
   text: r => `<pre>${esc(r.output || "(no output)")}</pre>`,
@@ -115,14 +122,9 @@ const renderers = {
   },
   bars: r => {
     const d = JSON.parse(r.output);
-    const clamp = p => Math.min(100, Math.max(0, p || 0));
-    const win = w => `<div class="win">
-        <div class="rowhead"><span>${esc(w.label)}</span><b>${clamp(w.used_percent)}%</b></div>
-        <div class="bar"><i style="width:${clamp(w.used_percent)}%"></i></div>
-        <div class="sub">resets in ${esc(w.resets_in)}</div>
-      </div>`;
-    return `<div class="plan">${esc(d.plan)} plan</div>` +
-      ((d.windows || []).map(win).join("") || "<pre>(no usage data)</pre>");
+    return (d.plan ? `<div class="plan">${esc(d.plan)} plan</div>` : "") +
+      ((d.windows || []).map(win).join("") || "<pre>(no usage data)</pre>") +
+      (d.notes ? `<pre class="notes">${esc(d.notes)}</pre>` : "");
   }
 };
 
