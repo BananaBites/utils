@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Show Codex (ChatGPT plan) rate-limit usage.
+# Credentials come from pi (~/.pi/agent/auth.json -> "openai-codex") or the
+# Codex CLI (~/.codex/auth.json), whichever is logged in. No codex binary needed.
+# Usage: codex-usage        human-readable bars
+#        codex-usage --json normalized JSON for the dashboard
+set -euo pipefail
+
+base="${CODEX_BASE_URL:-https://chatgpt.com/backend-api}"
+pi_auth="${PI_AUTH:-$HOME/.pi/agent/auth.json}"
+codex_auth="${CODEX_AUTH:-$HOME/.codex/auth.json}"
+
+token=""; account=""; originator="codex_cli_rs"
+if [ -f "$codex_auth" ] && token=$(jq -r '.tokens.access_token // empty' "$codex_auth") && [ -n "$token" ]; then
+  account=$(jq -r '.tokens.account_id // empty' "$codex_auth")
+elif [ -f "$pi_auth" ] && token=$(jq -r '."openai-codex".access // empty' "$pi_auth") && [ -n "$token" ]; then
+  originator="pi"
+  # The account id is a claim inside the access-token JWT.
+  payload=$(cut -d. -f2 <<<"$token" | tr '_-' '/+')
+  case $((${#payload} % 4)) in 2) payload+="==" ;; 3) payload+="=" ;; esac
+  account=$(printf '%s' "$payload" | jq -rR '@base64d | fromjson | ."https://api.openai.com/auth".chatgpt_account_id // empty' 2>/dev/null || true)
+else
+  echo "no Codex login found — run 'pi' -> /login (Codex) or 'codex login'" >&2
+  exit 1
+fi
+
+hdr=(-H "Authorization: Bearer $token" -H "User-Agent: codex-cli" -H "originator: $originator" -H "Accept: application/json")
+[ -n "$account" ] && hdr+=(-H "ChatGPT-Account-ID: $account")
+
+resp=$(curl -sS -w $'\n%{http_code}' "$base/wham/usage" "${hdr[@]}") || exit 1
+http=${resp##*$'\n'}; raw=${resp%$'\n'*}
+if [ "$http" != 200 ]; then
+  if [ "$http" = 401 ]; then
+    echo "codex API HTTP 401 — token expired; open pi/codex once to refresh" >&2
+  else
+    echo "codex API HTTP $http: $raw" >&2
+  fi
+  exit 1
+fi
+
+norm=$(jq -c '
+  def wlabel($s): if $s <= 0 then "limit"
+    elif $s % 86400 == 0 then "\($s/86400)d"
+    elif $s % 3600 == 0 then "\($s/3600)h"
+    elif $s % 60 == 0 then "\($s/60)m" else "\($s)s" end;
+  def rhuman($s):
+    ($s/86400|floor) as $d | (($s%86400)/3600|floor) as $h | (($s%3600)/60|floor) as $m |
+    ([if $d>0 then "\($d)d" else empty end,
+      if $h>0 then "\($h)h" else empty end,
+      if $m>0 then "\($m)m" else empty end] | join(" ")) |
+    if . == "" then "now" else . end;
+  {
+    plan: (.plan_type // "unknown"),
+    windows: ([.rate_limit.primary_window, .rate_limit.secondary_window]
+      | map(select(. != null))
+      | map({label: wlabel(.limit_window_seconds), used_percent: .used_percent, resets_in: rhuman(.reset_after_seconds)})),
+    credits: (.credits.balance // null)
+  }' <<<"$raw")
+
+if [ "${1:-}" = "--json" ]; then echo "$norm"; exit; fi
+
+jq -r '
+  def rep($s;$n): reduce range(0;$n) as $i (""; . + $s);
+  def bar($p): 18 as $n | (($p/100*$n)|floor) as $f |
+    rep("█"; if $f > $n then $n else $f end) + rep("░"; $n - (if $f > $n then $n else $f end));
+  "plan      \(.plan)",
+  (.windows[] | "\(.label)  \(bar(.used_percent))  \(.used_percent)%  resets in \(.resets_in)"),
+  (select(.credits != null) | "credits   \(.credits)")' <<<"$norm"

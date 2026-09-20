@@ -1,5 +1,11 @@
 [
   {
+    "name": "codex",
+    "title": "Codex usage",
+    "command": "/workspaces/utils/codex/codex-usage --json",
+    "render": "bars"
+  },
+  {
     "name": "openrouter",
     "title": "OpenRouter credits",
     "command": "/workspaces/utils/openrouter/openrouter --json",

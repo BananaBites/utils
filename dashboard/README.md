@@ -29,9 +29,10 @@ By default a widget's output is shown as plain text. Add `"render": "<name>"`
 to draw it differently. Built-in renderers:
 
 - `text` (default) — the raw output in a `<pre>`.
-- `credits` — expects the command to print JSON like
-  `{credits, used, remaining, today}`, shown as a progress bar. Used by the
-  OpenRouter widget; see `../openrouter/openrouter --json`.
+- `credits` — expects JSON like `{credits, used, remaining, today}`, shown as
+  a progress bar. Used by OpenRouter; see `../openrouter/openrouter --json`.
+- `bars` — expects `{plan, windows:[{label, used_percent, resets_in}]}` and draws
+  one progress bar per window. Used by Codex; see `../codex/codex-usage --json`.
 
 The server binds `127.0.0.1` only, but it runs commands you put in the config,
 so don't expose the port.
