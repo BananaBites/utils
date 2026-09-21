@@ -20,7 +20,8 @@ the base plugin from the fzf repository (it provides `fzf#run()`):
     ~/.vim/pack/utils/opt/fzf-vim   <- junegunn/fzf.vim   (:Files, :Rg, ...)
 
 An existing `~/.vimrc` is backed up once to `~/.vimrc.bak`. In Vim: `:Erc`
-edits the config, `:Lrc` reloads it.
+edits the config, `:Lrc` reloads it. Note that `make install` overwrites
+`~/.vimrc` — local edits there are gone after a reinstall.
 
 ## All mappings (leader is space)
 
@@ -28,6 +29,7 @@ edits the config, `:Lrc` reloads it.
 |---|---|
 | `<space>p` | pick a file: fzf `:Files`, or `:find` without fzf |
 | `<space>g` | search text: fzf `:Rg`, or `:grep` without fzf (opens quickfix) |
+| `<space>G` | same, but including dotfiles and gitignored files (`.env`, `.non/`, ...) |
 | `<C-p>` | same as `<space>p` (only when fzf is installed) |
 | `<space>f` | move to the split on the left (`<C-w>h`) |
 | `<space>j` | move to the split on the right (`<C-w>l`) |
@@ -36,6 +38,7 @@ edits the config, `:Lrc` reloads it.
 | `<space>#` | previous buffer (`:b #`) |
 | `<space>s` | vertical split |
 | `<space>w` | strip trailing whitespace and save |
+| `<space>l` | toggle visible whitespace (`'list'`: tabs `»·`, line ends `¬`, trailing `·`, ...) |
 | `<C-j>` / `<C-k>` | 5 lines down / up |
 | `<CR>` | clear search highlight |
 | `>` / `<` (visual) | indent / outdent, keep selection |
@@ -57,15 +60,39 @@ edits the config, `:Lrc` reloads it.
   `<CR>` clears the highlight, `*`/`#` search the word under the cursor.
 - `<space>p` / `<C-p>` — **file names**. With fzf: fuzzy picker over the working
   directory; type a few letters, Enter opens, `<C-v>`/`<C-x>`/`<C-t>` open in a
-  split/tab, `<Tab>` marks several. Without fzf: `:find` + `<Tab>` completion
-  over the whole tree (`path+=**`), no fuzzy matching.
-- `<space>g` — **text content**. With fzf: `:Rg` (ripgrep, live results while you
-  type, `--smart-case`; Enter jumps to the match). Without fzf: `:grep` fills the
-  quickfix list and opens it automatically; `:cnext`/`:cprev` walk the hits.
+  split/tab, `<Tab>` marks several. fzf's file walker already includes dotfiles
+  (and ignores `.gitignore`, so `.env` shows up too). Without fzf: `:find` +
+  `<Tab>` completion over the whole tree (`path+=**`), no fuzzy matching.
+- `<space>g` — **text content**. With fzf: `:Rg` (ripgrep; `--smart-case`, Enter
+  jumps to the match). Without fzf: `:grep` fills the quickfix list and opens it
+  automatically; `:cnext`/`:cprev` walk the hits.
+- `<space>G` — same search, but over **dotfiles and gitignored files** too
+  (`rg --hidden --no-ignore`, minus `.git/` and `node_modules/`). Use it to find
+  `.env`, `.non/`, `.github/`, or anything `.gitignore` hides. `:Rg` itself
+  respects `.gitignore` and skips dotfiles, so plain `<space>g` will not see
+  them.
 - `<space>n` — browse directories instead of searching: Enter opens, `-` goes
   up, `R` rename, `d`/`%` new directory/file, `D` delete, `gh` hidden files.
 - `<space>b` / `<space>#` — switch between files that are already open. With
   fzf, `:Buffers` is the fuzzy version of that.
+
+## Whitespace and control characters
+
+`<space>l` toggles `'list'`: with it on, tabs show as `»·`, line ends as `¬`,
+trailing blanks as `·`, non-breaking spaces as `·`, and lines running off the
+screen edge as `›`/`‹`. Control characters are shown as `^M`, `^[`, … whenever
+`'list'` is on. Independently of that, trailing whitespace is always painted
+red (`match ExtraWhitespace`).
+
+To see more, extend `'listchars'`:
+
+| item | shows |
+|---|---|
+| `space:·` | every space (noisy) |
+| `lead:·` / `leadmultispace:···` | leading whitespace / indentation |
+| `multispace:···` | runs of spaces in one symbol |
+
+Want `'list'` always on? Add `set list` next to the `set listchars` line.
 
 ## Themes
 
