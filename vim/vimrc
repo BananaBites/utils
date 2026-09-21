@@ -1,0 +1,65 @@
+" Minimal Vim setup — install: make install; on a remote: paste this file
+" into ~/.vimrc (themes and fzf are optional, their mappings stay inactive).
+unlet! skip_defaults_vim
+source $VIMRUNTIME/defaults.vim
+
+let mapleader = " "
+set number cursorline laststatus=2
+set tabstop=4 shiftwidth=4 expandtab smartindent
+set scrolloff=20 mouse=a ttimeoutlen=10 hidden
+set hlsearch ignorecase smartcase
+set statusline=%f%m%r\ %y\ %=%l:%c\ %p%%
+set path+=**
+set wildignore+=*/.git/*,*/node_modules/*,*/__pycache__/*
+set grepprg=rg\ --vimgrep\ --smart-case
+set grepformat=%f:%l:%c:%m
+if exists('+clipboard') | set clipboard=unnamedplus | endif
+
+call mkdir(expand('~/.vim/backup'), 'p')
+call mkdir(expand('~/.vim/swap'), 'p')
+call mkdir(expand('~/.vim/undo'), 'p')
+set backupdir=~/.vim/backup// directory=~/.vim/swap// undodir=~/.vim/undo//
+if has('persistent_undo') | set undofile | endif
+
+nnoremap <CR> :nohlsearch<CR><CR>
+nnoremap <C-j> 5j
+nnoremap <C-k> 5k
+vnoremap > >gv
+vnoremap < <gv
+
+" netrw: no banner, and wipe its directory buffer when the explorer closes
+let g:netrw_banner = 0
+autocmd FileType netrw setlocal bufhidden=wipe
+
+nnoremap <leader>n :Lexplore<CR>
+nnoremap <leader>b :ls<CR>:b<Space>
+nnoremap <leader>s :vsp<CR>
+nnoremap <leader># :b #<CR>
+nnoremap <leader>w :Rts<CR>:w<CR>
+nnoremap <leader>f :find<Space>
+nnoremap <leader>/ :grep<Space>
+
+command! Erc e $MYVIMRC
+command! Lrc so $MYVIMRC
+command! Rts %s/\s\+$//ge
+
+highlight ExtraWhitespace ctermbg=52 guibg=#5f0000
+autocmd ColorScheme * highlight ExtraWhitespace ctermbg=52 guibg=#5f0000
+match ExtraWhitespace /\s\+$/
+let &colorcolumn = join(range(81, 999), ",")
+
+" fzf.vim — cloned by `make install`, skipped when missing
+if executable('fzf') && isdirectory(expand('~/.vim/pack/utils/opt/fzf'))
+  let g:fzf_layout = { 'down': '~40%' }
+  packadd fzf
+  nnoremap <C-p> :Files<CR>
+  nnoremap <leader>/ :Rg<CR>
+endif
+
+set termguicolors
+for s:theme in ['catppuccin_latte', 'catppuccin_mocha', 'peachpuff', 'habamax']
+  if !empty(globpath(&runtimepath, 'colors/' . s:theme . '.vim'))
+    execute 'colorscheme ' . s:theme
+    break
+  endif
+endfor
