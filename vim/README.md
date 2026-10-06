@@ -97,7 +97,7 @@ Want `'list'` always on? Add `set list` next to the `set listchars` line.
 ## Themes
 
 `catppuccin_latte` (light, default) and `catppuccin_mocha` (dark) are vendored
-from https://github.com/catppuccin/vim (MIT):
+from https://github.com/catppuccin/vim (MIT; see `LICENSE.catppuccin`):
 
     :colorscheme catppuccin_mocha
 
